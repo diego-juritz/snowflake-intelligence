@@ -1,0 +1,149 @@
+name: RISK_SV
+description: SV for ROLE_RISK
+tables:
+  - name: DIM_CUSTOMERS
+    description: The table contains records of customers with their identifying and contact information. Each record includes geographic location, creditworthiness metrics, and membership timeline details.
+    base_table:
+      database: SNOW_INTEL_BANK_DEMO
+      schema: SNOW_INTEL_BANK_DEMO
+      table: DIM_CUSTOMERS
+    dimensions:
+      - name: CITY
+        description: City where the customer resides
+        expr: CITY
+        data_type: VARCHAR(16777216)
+        sample_values:
+          - LOS ANGELES
+          - MIAMI
+          - NEW YORK
+      - name: CREDIT_SCORE
+        synonyms:
+          - score scoring
+        description: Credit rating from 350 to 850. Higher is better
+        expr: CREDIT_SCORE
+        data_type: NUMBER(38,0)
+        sample_values:
+          - '295'
+          - '144'
+          - '521'
+      - name: CUST_ID
+        description: Unique identifier for the banking customer
+        expr: CUST_ID
+        data_type: NUMBER(38,0)
+        sample_values:
+          - '98'
+          - '29'
+          - '1'
+    time_dimensions:
+      - name: MEMBER_SINCE
+        description: Date when the customer opened their first account
+        expr: MEMBER_SINCE
+        data_type: DATE
+        sample_values:
+          - '2021-04-17'
+          - '2017-07-12'
+          - '2020-04-22'
+    primary_key:
+      columns:
+        - CUST_ID
+  - name: FACT_LOANS
+    description: The table contains records of loan applications submitted by customers. Each record represents a single application and includes details about the customer, assigned officer, loan characteristics, requested funding amount, application timing, and current processing status.
+    base_table:
+      database: SNOW_INTEL_BANK_DEMO
+      schema: SNOW_INTEL_BANK_DEMO
+      table: FACT_LOANS
+    dimensions:
+      - name: APP_ID
+        description: Unique loan application ID
+        expr: APP_ID
+        data_type: NUMBER(38,0)
+        sample_values:
+          - '1062'
+          - '1001'
+          - '1040'
+      - name: CURRENT_STATUS
+        description: 'Latest state of the loan: Requested, Under Review, Approved, or Rejected'
+        expr: CURRENT_STATUS
+        data_type: VARCHAR(16777216)
+        sample_values:
+          - Under Review
+          - Approved
+          - Requested
+      - name: CUST_ID
+        description: Foreign key to Dim_Customers
+        expr: CUST_ID
+        data_type: NUMBER(38,0)
+        sample_values:
+          - '40'
+          - '84'
+          - '37'
+      - name: LOAN_TYPE
+        description: 'Category of loan: Mortgage, Auto, Personal, or Business'
+        expr: LOAN_TYPE
+        data_type: VARCHAR(16777216)
+        sample_values:
+          - Auto
+          - Mortgage
+          - Business
+    time_dimensions:
+      - name: APPLICATION_DATE
+        description: The date the application was submitted
+        expr: APPLICATION_DATE
+        data_type: DATE
+        sample_values:
+          - '2026-02-05'
+          - '2026-01-05'
+          - '2026-01-26'
+    facts:
+      - name: DAYS_OPEN
+        synonyms:
+          - aging
+          - delay
+        description: Number of days elapsed since the application was created
+        expr: DAYS_OPEN
+        data_type: NUMBER(38,0)
+        access_modifier: public_access
+        sample_values:
+          - '24'
+          - '58'
+          - '42'
+        default_aggregation: 2
+      - name: REQUESTED_AMOUNT
+        description: Total money requested by the applicant in USD
+        expr: REQUESTED_AMOUNT
+        data_type: NUMBER(12,2)
+        access_modifier: public_access
+        sample_values:
+          - '472969.00'
+          - '74705.00'
+          - '127003.00'
+    metrics:
+      - name: AVERAGE_DAYS_OPEN
+        description: Average Days Open
+        expr: AVG(DAYS_OPEN)
+        access_modifier: public_access
+      - name: TOTAL_LOAN_AMOUNT
+        synonyms:
+          - amount
+        description: total loan amout
+        expr: SUM(REQUESTED_AMOUNT)
+        access_modifier: public_access
+relationships:
+  - name: FACT_LOAN_DIM_CUSTOMERS
+    left_table: FACT_LOANS
+    right_table: DIM_CUSTOMERS
+    relationship_columns:
+      - left_column: CUST_ID
+        right_column: CUST_ID
+module_custom_instructions:
+  question_categorization: |-
+    Strict Response Policy:
+    "You are a precise data assistant. Your primary goal is to generate accurate SQL based ONLY on the provided semantic model.
+
+    If a user asks for a dimension or concept that is not in this model (e.g., if they ask for 'Branch' or 'Officer' in the RISK_SV), DO NOT substitute it with another dimension like 'City'.
+
+    Instead, respond exactly with: 'I am sorry, but I do not have information about [requested concept] in this model. I only have access to customer credit profiles and loan application data.'
+
+    Do not attempt to provide alternatives or geographic distributions unless specifically asked for 'City'.
+
+    Accuracy is more important than helpfulness. If in doubt, say you don't have the data."

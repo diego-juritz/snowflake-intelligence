@@ -1,0 +1,35 @@
+graph TD
+    subgraph Client_Interface [Interface Layer]
+        A[Slack User] -- "Natural Language Query" --> B[Slack Workspace]
+    end
+
+    subgraph App_Logic [Logic Layer - Python Bolt]
+        B -- "Message Event" --> C{Python App}
+        C -- "Reads .env" --> D[Credentials & Role Selection]
+    end
+
+    subgraph Snowflake_Intelligence [Semantic Layer - Cortex Analyst]
+        D -- "Auth with ROLE_RISK" --> E[Cortex Agent: Risk]
+        D -- "Auth with ROLE_SALES" --> F[Cortex Agent: Sales]
+        
+        E -- "Uses" --> G[RISK_SV - Semantic Model]
+        F -- "Uses" --> H[SALES_SV - Semantic Model]
+    end
+
+    subgraph Data_Layer [Data Layer - Gold Schema]
+        G -- "Joins" --> I[FACT_LOANS]
+        G -- "Joins" --> J[DIM_CUSTOMERS]
+        
+        H -- "Joins" --> I
+        H -- "Joins" --> K[DIM_OFFICERS]
+        
+        I -- "FK: CUST_ID" --> J
+        I -- "FK: OFFICER_ID" --> K
+    end
+
+    %% Styling
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#3498db,color:#fff,stroke-width:2px
+    style G fill:#e74c3c,color:#fff
+    style H fill:#2ecc71,color:#fff
+    style I fill:#f1c40f,stroke:#333

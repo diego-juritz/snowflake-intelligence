@@ -1,0 +1,139 @@
+name: SALES_SV
+tables:
+  - name: DIM_OFFICERS
+    description: The table contains records of bank employees who manage loan applications. Each record represents an individual officer and includes their assigned branch and regional location.
+    base_table:
+      database: SNOW_INTEL_BANK_DEMO
+      schema: SNOW_INTEL_BANK_DEMO
+      table: DIM_OFFICERS
+    dimensions:
+      - name: BRANCH_NAME
+        description: The specific bank branch name where the officer is located
+        expr: BRANCH_NAME
+        data_type: VARCHAR(16777216)
+        sample_values:
+          - Wall Street
+          - Brickell
+          - Silicon Valley
+      - name: OFFICER_NAME
+        description: Full name of the loan officer responsible for the application
+        expr: OFFICER_NAME
+        data_type: VARCHAR(16777216)
+        sample_values:
+          - Officer 2
+          - Officer 0
+          - Officer 1
+      - name: REGION
+        description: Geographic territory (North, South, East, West) managed by the officer
+        expr: REGION
+        data_type: VARCHAR(16777216)
+        sample_values:
+          - North
+          - West
+          - South
+    primary_key:
+      columns:
+        - OFFICER_ID
+  - name: FACT_LOANS
+    description: The table contains records of loan applications submitted by customers. Each record represents a single application and includes details about the customer, assigned officer, loan characteristics, requested funding amount, application timing, and current processing status.
+    base_table:
+      database: SNOW_INTEL_BANK_DEMO
+      schema: SNOW_INTEL_BANK_DEMO
+      table: FACT_LOANS
+    dimensions:
+      - name: APP_ID
+        description: Unique loan application ID
+        expr: APP_ID
+        data_type: NUMBER(38,0)
+        sample_values:
+          - '1062'
+          - '1001'
+          - '1040'
+      - name: CURRENT_STATUS
+        description: 'Latest state of the loan: Requested, Under Review, Approved, or Rejected'
+        expr: CURRENT_STATUS
+        data_type: VARCHAR(16777216)
+        sample_values:
+          - Under Review
+          - Approved
+          - Requested
+      - name: LOAN_TYPE
+        description: 'Category of loan: Mortgage, Auto, Personal, or Business'
+        expr: LOAN_TYPE
+        data_type: VARCHAR(16777216)
+        sample_values:
+          - Auto
+          - Mortgage
+          - Business
+      - name: OFFICER_ID
+        description: Foreign key to Dim_Officers
+        expr: OFFICER_ID
+        data_type: NUMBER(38,0)
+        sample_values:
+          - '12'
+          - '2'
+          - '5'
+    time_dimensions:
+      - name: APPLICATION_DATE
+        description: The date the application was submitted
+        expr: APPLICATION_DATE
+        data_type: DATE
+        sample_values:
+          - '2026-02-05'
+          - '2026-01-05'
+          - '2026-01-26'
+    facts:
+      - name: DAYS_OPEN
+        synonyms:
+          - aging
+          - delay
+        description: Number of days elapsed since the application was created
+        expr: days_open
+        data_type: NUMBER(38,0)
+        access_modifier: public_access
+      - name: REQUESTED_AMOUNT
+        description: Total money requested by the applicant in USD
+        expr: REQUESTED_AMOUNT
+        data_type: NUMBER(12,2)
+        access_modifier: public_access
+        sample_values:
+          - '472969.00'
+          - '74705.00'
+          - '127003.00'
+    metrics:
+      - name: APPLICATION_COUNT
+        synonyms:
+          - applications
+          - requests
+        description: Application Count
+        expr: count(app_id)
+        access_modifier: public_access
+      - name: AVERAGE_TICKET_SIZE
+        description: Average of requested amount
+        expr: AVG(REQUESTED_AMOUNT)
+        access_modifier: public_access
+      - name: TOTAL_SALES_AMOUNT
+        synonyms:
+          - amount
+          - money
+        description: Total Sales Amount
+        expr: SUM(REQUESTED_AMOUNT)
+        access_modifier: public_access
+relationships:
+  - name: FACT_LOANS_DIM_OFFICERS
+    left_table: FACT_LOANS
+    right_table: DIM_OFFICERS
+    relationship_columns:
+      - left_column: OFFICER_ID
+        right_column: OFFICER_ID
+module_custom_instructions:
+  question_categorization: |-
+    "You are a Sales Performance Assistant. You only have access to loan application volumes, officer details, and regional data.
+
+    If a user asks about customer credit scores, debt ratios, or personal customer information, strictly respond: 'I do not have access to risk or credit score data. I can only assist with sales and officer performance queries.'
+
+    Do not attempt to substitute missing dimensions.
+
+    Use 'Loan Amount' as a synonym for 'Requested Amount'.
+
+    Accuracy is mandatory. If you cannot find a link between the question and the sales metrics, state you don't have the information."
