@@ -1,0 +1,13 @@
+-- 1. Crear el repositorio llamado "loans"
+CREATE IMAGE REPOSITORY snow_intel_bank_demo.snow_intel_bank_demo.loans;
+
+-- 2. Darle permisos al rol de tu bot (reemplaza 'TU_ROL_DE_BOT' por el rol que uses)
+GRANT READ, WRITE ON IMAGE REPOSITORY snow_intel_bank_demo.snow_intel_bank_demo.loans TO ROLE TU_ROL_DE_BOT;
+
+docker login kvberno-guc44171.registry.snowflakecomputing.com -u diego
+
+#docker build -t hjkhdnd-atrium-partner.registry.snowflakecomputing.com/wealth_management_demo/gold_reporting/slack_bot_repo/bot_image:v1 .
+
+docker build --platform linux/amd64 -t kvberno-guc44171.registry.snowflakecomputing.com/snow_intel_bank_demo/snow_intel_bank_demo/loans/loans:v1 .
+
+docker push kvberno-guc44171.registry.snowflakecomputing.com/snow_intel_bank_demo/snow_intel_bank_demo/loans/loans:v1

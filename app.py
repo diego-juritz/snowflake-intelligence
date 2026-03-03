@@ -1,81 +1,107 @@
 import os
 import re
+import pandas as pd
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
-import cortex_chat  # Custom module for Snowflake Cortex Analyst
+import snowflake.connector
+import cortex_chat
 
-# Load environment variables
 load_dotenv()
 
-# Snowflake Configuration
-SNOW_USER = os.getenv("SNOW_USER")
+# Configuración
 SNOW_ROLE = os.getenv("SNOW_ROLE")
 SNOW_PAT = os.getenv("PAT")
 AGENT_ENDPOINT = os.getenv("AGENT_ENDPOINT")
-
-# Slack Configuration
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN")
 
-# Initialize Slack App
 app = App(token=SLACK_BOT_TOKEN)
 
 def format_for_slack(text: str) -> str:
-    """Convert standard Markdown bold to Slack bold format."""
-    if not text:
-        return ""
-    # Convert **bold** to *bold* for Slack's mrkdwn
+    if not text: return ""
     return re.sub(r'\*\*(.*?)\*\*', r'*\1*', text)
 
 @app.event("app_mention")
+def handle_app_mentions(event, say):
+    process_query(event, say)
+
 @app.message(re.compile(".*"))
-def handle_queries(event, say):
-    """
-    Main handler for both Direct Messages and App Mentions.
-    Processes natural language queries using Snowflake Cortex Analyst.
-    """
+def handle_direct_messages(event, say):
+    if event.get('channel_type') == 'im':
+        process_query(event, say)
+
+def process_query(event, say):
     raw_text = event.get('text', '').strip()
-    
-    # Remove the bot's user ID from the message text if it was a mention
     query = re.sub(r'<@\w+>', '', raw_text).strip()
     
     if not query:
-        say("👋 Hi! I'm your Data Assistant. Ask me anything about loans or sales.")
+        say("👋 Hi! I'm your Loans Assistant.")
         return
 
     try:
-        # 1. Provide immediate feedback to the user
         say("❄️ _Querying Snowflake..._")
-        
-        # 2. Call the Cortex Analyst Agent
-        # The 'role' parameter ensures Snowflake applies the correct Semantic View (RBAC)
         response = CORTEX_APP.chat(query, role=SNOW_ROLE)
         
-        # 3. Deliver the final answer only
+        blocks = []
+        
+        # 1. Preparar el resumen de texto
         if response.get('text'):
-            final_answer = format_for_slack(response['text'])
-            say(text=final_answer)
+            summary = format_for_slack(response['text'])
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": summary}
+            })
+
+        # 2. Lógica Inteligente para la Tabla
+        sql_queries = response.get('sql_queries')
+        if sql_queries:
+            with CONN.cursor() as cur:
+                cur.execute(sql_queries[0])
+                df = pd.DataFrame(cur.fetchall(), columns=[col[0] for col in cur.description])
             
-        # Optional: Display follow-up suggestions if available
+            # Solo mostrar tabla si hay más de un dato o es una lista
+            # Si el resultado es una sola celda (ej. un Total), el texto suele ser suficiente
+            if not df.empty and df.size > 1:
+                limit = 10
+                table_text = df.head(limit).to_string(index=False)
+                
+                blocks.append({
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"```\n{table_text}\n```"}
+                })
+                
+                if len(df) > limit:
+                    blocks.append({
+                        "type": "context",
+                        "elements": [{"type": "mrkdwn", "text": f"_Showing first {limit} of {len(df)} rows._"}]
+                    })
+
+        # 3. Sugerencias
         if response.get('suggestions'):
-            suggestion_list = "\n".join([f"• _{s}_" for s in response['suggestions'][:2]])
-            say(text=f"*Suggestions:*\n{suggestion_list}")
+            suggs = "\n".join([f"• _{format_for_slack(s)}_" for s in response['suggestions'][:2]])
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Suggestions:*\n{suggs}"}
+            })
+
+        # Enviar un único mensaje consolidado
+        say(blocks=blocks, text="New data response")
 
     except Exception as e:
-        print(f"Error processing query: {e}")
-        say(f"⚠️ I encountered an error while accessing the data: `{str(e)}`.")
+        say(f"⚠️ Error: `{str(e)}`")
 
-def initialize_agent():
-    """Initialize the Cortex Chat integration with endpoint and credentials."""
-    print(f"🚀 Initializing Snowflake Agent...")
-    print(f"👤 User: {SNOW_USER} | 🔐 Role: {SNOW_ROLE}")
-    return cortex_chat.CortexChat(AGENT_ENDPOINT, SNOW_PAT)
+def get_snowflake_conn():
+    return snowflake.connector.connect(
+        user=os.getenv("SNOW_USER"),
+        password=SNOW_PAT,
+        account=os.getenv("ACCOUNT"),
+        warehouse=os.getenv("WAREHOUSE"),
+        role=SNOW_ROLE
+    )
 
 if __name__ == "__main__":
-    # Ensure the Cortex App is ready before starting Slack
-    CORTEX_APP = initialize_agent()
-    
-    print("⚡ Slack Bot is running in Socket Mode...")
+    CONN = get_snowflake_conn()
+    CORTEX_APP = cortex_chat.CortexChat(AGENT_ENDPOINT, SNOW_PAT)
     handler = SocketModeHandler(app, SLACK_APP_TOKEN)
     handler.start()
